@@ -1,0 +1,26 @@
+# Road Safety AI System – Python 3.10+
+# Install: pip install -r requirements.txt
+
+# YOLOv8 (hazard detection)
+ultralytics>=8.0.0,<9.0.0
+
+# Video / image processing
+opencv-python>=4.8.0
+
+# Deep learning backend
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Advisory risk model
+scikit-learn>=1.3.0
+joblib>=1.3.0
+
+# Weather API and HTTP
+requests>=2.31.0
+
+# Numerical / data
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Optional: for downloading arrow/U-turn dataset (pip install roboflow)
+roboflow>=1.1.0

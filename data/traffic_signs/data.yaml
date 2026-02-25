@@ -1,0 +1,20 @@
+# YOLOv8 traffic sign dataset – edit paths and class names to match your labels
+# Put images in train/images, val/images and YOLO-format .txt labels in train/labels, val/labels
+
+path: .   # dataset root (relative to this file)
+train: train/images
+val: val/images
+
+# Number of classes – update when you add/remove sign types
+nc: 8
+
+# Class names – edit to match your labeled classes (order = class index 0, 1, 2, ...)
+names:
+  0: traffic_light
+  1: stop
+  2: speed_limit
+  3: yield
+  4: warning
+  5: no_entry
+  6: pedestrian_crossing
+  7: other_sign
