@@ -1,2 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
+venv/
+.env
+
+# Media processing / uploads
+uploads/
 *.mp4
+*.avi
 videosample/
+
+# Models and datasets
+models/
+datasets/
+data/
+*.pt
+*.zip
+*.onnx
+
+# Ultralytics/Roboflow caches
+runs/
+*.cache
+yolov8n.pt
+yolo26n.pt
+
+# IDE / OS files
+.vscode/
+.idea/
+.DS_Store
+kaggle.json

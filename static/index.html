@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Road Safety AI — Intelligent Advisory System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;600;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <meta name="description"
+        content="Intelligent Road Safety AI — combining YOLO object detection with real-time weather for smart driving advisories.">
+</head>
+
+<body>
+    <!-- Ambient Background -->
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+    <div class="ambient-glow glow-3"></div>
+    <div class="noise-overlay"></div>
+
+    <main class="app-layout">
+        <!-- Header -->
+        <header class="hero-section">
+            <div class="badge fade-in-up" id="active-model-badge">6 Vision Models Active</div>
+            <h1 class="fade-in-up stagger-1">Road Safety <span class="gradient-text">AI</span></h1>
+            <p class="subtitle fade-in-up stagger-2">Multi-Model Vision + Real-Time Weather = Smart Driving Advisories
+            </p>
+        </header>
+
+        <!-- Weather Strip -->
+        <section class="weather-strip fade-in-up stagger-2" id="weather-strip">
+            <div class="weather-loading" id="weather-loading">
+                <div class="mini-spinner"></div>
+                <span>Fetching weather data...</span>
+            </div>
+            <div class="weather-data hidden" id="weather-data">
+                <div class="weather-item weather-main">
+                    <img id="weather-icon" src="" alt="Weather" class="weather-icon-img">
+                    <div>
+                        <span class="weather-temp" id="weather-temp">--°C</span>
+                        <span class="weather-desc" id="weather-desc">--</span>
+                    </div>
+                </div>
+                <div class="weather-item">
+                    <span class="weather-label">Humidity</span>
+                    <span class="weather-value" id="weather-humidity">--%</span>
+                </div>
+                <div class="weather-item">
+                    <span class="weather-label">Visibility</span>
+                    <span class="weather-value" id="weather-visibility">--km</span>
+                </div>
+                <div class="weather-item">
+                    <span class="weather-label">Wind</span>
+                    <span class="weather-value" id="weather-wind">--m/s</span>
+                </div>
+                <div class="weather-item">
+                    <span class="weather-label">Location</span>
+                    <span class="weather-value" id="weather-city">--</span>
+                </div>
+                <div class="weather-risk-badge" id="weather-risk-badge">
+                    <span class="risk-dot"></span>
+                    <span id="weather-risk-text">Unknown</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Upload Interface -->
+        <section class="vision-interface fade-in-up stagger-3" id="main-interface">
+            <div class="glass-panel main-panel">
+
+                <div id="drop-zone" class="upload-zone">
+                    <div class="icon-pulse">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <h2>Initialize Data Stream</h2>
+                    <p>Drag & drop traffic camera footage or <span class="highlight">Browse your files</span></p>
+                    <p class="file-hint">Supports high-res Images and Video (.mp4)</p>
+                    <input type="file" id="file-input" accept="image/*,video/*" hidden>
+                </div>
+
+                <!-- Preview & Controls -->
+                <div id="preview-container" class="preview-container hidden">
+                    <div class="media-container">
+                        <img id="image-preview" src="" alt="Media Preview" class="hidden media-fluid">
+                        <video id="video-preview" src="" controls class="hidden media-fluid" muted></video>
+                    </div>
+
+                    <div class="action-dock">
+                        <select id="model-type-select" class="modern-select">
+                            <option value="all_models">🧠 All Models Combined</option>
+                            <option value="gtsrb_v2">🚦 Traffic Signs v2 (50ep, 640px)</option>
+                            <option value="gtsrb_fast">⚡ Traffic Signs Fast (25ep, 416px)</option>
+                            <option value="gtsrb">🚦 Traffic Signs (Original)</option>
+                            <option value="road_damage">🛣️ Road Damage</option>
+                            <option value="indian_signs">🇮🇳 Indian Signs</option>
+                        </select>
+                        <button id="clear-btn" class="modern-btn btn-ghost">Discard</button>
+                        <button id="analyze-btn" class="modern-btn btn-primary">
+                            <span class="btn-text">Analyze with AI</span>
+                            <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14"></path>
+                                <path d="m12 5 7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Results Dashboard -->
+        <section id="results-dashboard" class="dashboard-section hidden">
+            <div class="dashboard-layout">
+                <!-- LEFT COLUMN: Main content -->
+                <div class="dash-left">
+                    <!-- Smart Advisory Banner -->
+                    <div class="advisory-banner glass-panel" id="advisory-banner">
+                        <div class="advisory-header">
+                            <div class="advisory-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" />
+                                    <path d="M12 8v4" />
+                                    <path d="M12 16h.01" />
+                                </svg>
+                            </div>
+                            <h3>Intelligent Driving Advisory</h3>
+                            <button class="speak-btn" id="speak-advisory-btn" title="Read aloud">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="advisory-text" id="advisory-text">Analyzing conditions...</p>
+                        <div class="advisory-tags" id="advisory-tags"></div>
+                    </div>
+
+                    <!-- Vision Output -->
+                    <div class="glass-panel viewport-panel">
+                        <div class="panel-header">
+                            <h3>Vision Output</h3>
+                            <div class="status-indicator">
+                                <span class="dot active"></span>
+                                <span class="status-text">Live Sync</span>
+                            </div>
+                        </div>
+                        <div class="media-result-wrapper">
+                            <div id="loading" class="inference-loading hidden">
+                                <div class="cyber-spinner"></div>
+                                <div class="loading-text">Running multi-model inference...</div>
+                                <div class="loading-bar">
+                                    <div class="loading-progress"></div>
+                                </div>
+                            </div>
+                            <img id="result-image" src="" alt="Inference Result" class="hidden media-fluid">
+                            <video id="result-video" src="" controls class="hidden media-fluid" autoplay muted loop></video>
+                        </div>
+                    </div>
+
+                    <!-- Detection Log -->
+                    <div class="glass-panel log-panel">
+                        <div class="panel-header">
+                            <h3>Telemetry Log</h3>
+                            <span class="badge secondary" id="detection-count">0 Entities</span>
+                        </div>
+                        <div class="log-container">
+                            <ul id="detections-list" class="neural-list"></ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: Speedometer + AI Assistant -->
+                <div class="dash-right">
+                    <!-- Speedometer (30%) -->
+                    <div class="glass-panel speedometer-panel">
+                        <canvas id="speedometer-canvas" width="240" height="150"></canvas>
+                        <div class="speed-readout">
+                            <span class="speed-value" id="speed-value">60</span>
+                            <span class="speed-unit">km/h</span>
+                        </div>
+                        <div class="speed-status" id="speed-status">Cruising</div>
+                    </div>
+
+                    <!-- AI Co-pilot (70%) -->
+                    <div class="glass-panel copilot-panel">
+                        <div class="copilot-header">
+                            <div class="copilot-identity">
+                                <div class="hexagon-avatar">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--brand-primary)">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                                    </svg>
+                                </div>
+                                <span>Sentinel AI</span>
+                            </div>
+                            <div class="pulse-indicator"></div>
+                        </div>
+                        <div id="ai-messages" class="copilot-stream">
+                            <div class="msg ai">Awaiting data stream. Weather + detection advisory engine online.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-dock centered mt-lg">
+                <button id="analyze-another-btn" class="modern-btn btn-outline">Analyze Another Stream</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal -->
+    <div id="image-modal" class="neural-modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content-wrapper">
+            <button class="modal-close" id="close-modal">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                </svg>
+            </button>
+            <div class="modal-header">
+                <h3>Frame Extraction Data</h3>
+            </div>
+            <img class="neural-modal-img" id="modal-img" src="" alt="Extracted Frame">
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
