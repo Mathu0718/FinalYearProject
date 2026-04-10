@@ -4,240 +4,509 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Road Safety AI — Intelligent Advisory System</title>
+    <title>Sentinel AI — Driving Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;600;800;900&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        dark: '#0f172a',
+                        panel: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Include existing component styles -->
     <link rel="stylesheet" href="/static/style.css">
-    <meta name="description"
-        content="Intelligent Road Safety AI — combining YOLO object detection with real-time weather for smart driving advisories.">
+    
+    <style>
+        /* Sentinel AI Fixed Dashboard Overrides */
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 100vh !important;
+            width: 100vw !important;
+            overflow: hidden !important;
+            background: #0b0c10 !important; 
+        }
+        
+        .app-layout { 
+            padding: 0 !important; max-width: none !important; width: 100%; height: 100%; display: flex; flex-direction: column;
+        }
+
+        .ambient-glow, .noise-overlay { display: none; }
+        
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        
+        .terminal-scanline {
+            pointer-events: none;
+            position: absolute; inset: 0;
+            background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%), linear-gradient(90deg, rgba(255,0,0,0.06), rgba(0,255,0,0.02), rgba(0,0,255,0.06));
+            background-size: 100% 4px, 3px 100%;
+            z-index: 20; opacity: 0.15;
+        }
+        
+        .glass-dark {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Overrides for script logic */
+        #advisory-banner { transition: opacity 0.3s; }
+        #advisory-banner.loading { opacity: 0.5; border-color: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+        .hidden-important { display: none !important; }
+
+        /* ═══════ ROI Drawing System ═══════ */
+        .roi-canvas-wrapper {
+            position: relative;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #roi-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: crosshair;
+            z-index: 10;
+        }
+        .roi-instruction-banner {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 20px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(99, 102, 241, 0.08));
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            color: #93c5fd;
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 1.5;
+            animation: roiPulse 2s ease-in-out infinite;
+        }
+        .roi-instruction-banner .roi-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: rgba(59, 130, 246, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .roi-instruction-banner .roi-icon i {
+            color: #60a5fa;
+        }
+        @keyframes roiPulse {
+            0%, 100% { border-color: rgba(59, 130, 246, 0.25); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+            50% { border-color: rgba(59, 130, 246, 0.45); box-shadow: 0 0 20px rgba(59, 130, 246, 0.1); }
+        }
+        .roi-ready-banner {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(16, 185, 129, 0.08)) !important;
+            border-color: rgba(34, 197, 94, 0.3) !important;
+            color: #86efac !important;
+            animation: none !important;
+        }
+        .roi-ready-banner .roi-icon {
+            background: rgba(34, 197, 94, 0.15) !important;
+        }
+        .roi-ready-banner .roi-icon i {
+            color: #4ade80 !important;
+        }
+        .roi-coords-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.08);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: #94a3b8;
+            margin-left: 4px;
+        }
+        .space-key-hint {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: #e2e8f0;
+            white-space: nowrap;
+        }
+        .roi-skip-btn {
+            padding: 6px 14px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .roi-skip-btn:hover {
+            background: rgba(255,255,255,0.12);
+            color: #e2e8f0;
+            border-color: rgba(255,255,255,0.2);
+        }
+    </style>
 </head>
 
-<body>
-    <!-- Ambient Background -->
-    <div class="ambient-glow glow-1"></div>
-    <div class="ambient-glow glow-2"></div>
-    <div class="ambient-glow glow-3"></div>
-    <div class="noise-overlay"></div>
-
+<body class="text-slate-200 font-sans">
+    
     <main class="app-layout">
-        <!-- Header -->
-        <header class="hero-section">
-            <div class="badge fade-in-up" id="active-model-badge">6 Vision Models Active</div>
-            <h1 class="fade-in-up stagger-1">Road Safety <span class="gradient-text">AI</span></h1>
-            <p class="subtitle fade-in-up stagger-2">Multi-Model Vision + Real-Time Weather = Smart Driving Advisories
-            </p>
+        <!-- TOP HEADER (FULL WIDTH) -->
+        <header class="h-[60px] shrink-0 bg-slate-900/80 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-6 z-20 shadow-md">
+            <div class="flex items-center gap-4">
+                <div class="flex items-baseline gap-2">
+                    <h1 class="text-2xl font-black tracking-tight text-white">Sentinel <span class="bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">AI</span></h1>
+                </div>
+                <div class="h-4 w-px bg-white/20 mx-2"></div>
+                <div id="active-model-badge" class="px-2.5 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider">
+                    6 Vision Models Active
+                </div>
+                <div class="hidden md:block text-xs font-medium text-slate-400 bg-white/5 px-3 py-1 rounded border border-white/5">
+                    Road Safety AI
+                </div>
+            </div>
+            <div class="text-xs text-slate-500 max-w-md text-right hidden lg:block tracking-wide">
+                Multi-Model Vision + Real-Time Weather = Smart Driving Advisories
+            </div>
         </header>
 
-        <!-- Weather Strip -->
-        <section class="weather-strip fade-in-up stagger-2" id="weather-strip">
-            <div class="weather-loading" id="weather-loading">
-                <div class="mini-spinner"></div>
-                <span>Fetching weather data...</span>
-            </div>
-            <div class="weather-data hidden" id="weather-data">
-                <div class="weather-item weather-main">
-                    <img id="weather-icon" src="" alt="Weather" class="weather-icon-img">
-                    <div>
-                        <span class="weather-temp" id="weather-temp">--°C</span>
-                        <span class="weather-desc" id="weather-desc">--</span>
-                    </div>
-                </div>
-                <div class="weather-item">
-                    <span class="weather-label">Humidity</span>
-                    <span class="weather-value" id="weather-humidity">--%</span>
-                </div>
-                <div class="weather-item">
-                    <span class="weather-label">Visibility</span>
-                    <span class="weather-value" id="weather-visibility">--km</span>
-                </div>
-                <div class="weather-item">
-                    <span class="weather-label">Wind</span>
-                    <span class="weather-value" id="weather-wind">--m/s</span>
-                </div>
-                <div class="weather-item">
-                    <span class="weather-label">Location</span>
-                    <span class="weather-value" id="weather-city">--</span>
-                </div>
-                <div class="weather-risk-badge" id="weather-risk-badge">
-                    <span class="risk-dot"></span>
-                    <span id="weather-risk-text">Unknown</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- Upload Interface -->
-        <section class="vision-interface fade-in-up stagger-3" id="main-interface">
-            <div class="glass-panel main-panel">
-
-                <div id="drop-zone" class="upload-zone">
-                    <div class="icon-pulse">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="17 8 12 3 7 8"></polyline>
-                            <line x1="12" y1="3" x2="12" y2="15"></line>
-                        </svg>
-                    </div>
-                    <h2>Initialize Data Stream</h2>
-                    <p>Drag & drop traffic camera footage or <span class="highlight">Browse your files</span></p>
-                    <p class="file-hint">Supports high-res Images and Video (.mp4)</p>
+        <!-- UPLOAD INTERFACE (Visible initially) -->
+        <section id="main-interface" class="absolute inset-0 top-[60px] z-50 bg-[#0b0c10] flex items-center justify-center p-6">
+            <div class="glass-dark max-w-2xl w-full p-8 rounded-3xl text-center">
+                <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-2xl p-12 cursor-pointer hover:border-blue-500 hover:bg-white/5 transition-all duration-300">
+                    <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto mb-4 text-blue-400 animate-pulse"></i>
+                    <h2 class="text-2xl font-bold text-white mb-2">Initialize Data Stream</h2>
+                    <p class="text-slate-400 text-sm mb-4">Drag & drop traffic camera footage or <span class="text-blue-400 font-medium">Browse files</span></p>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-widest">Supports High-Res Images & Video (.mp4)</p>
                     <input type="file" id="file-input" accept="image/*,video/*" hidden>
                 </div>
-
-                <!-- Preview & Controls -->
-                <div id="preview-container" class="preview-container hidden">
-                    <div class="media-container">
-                        <img id="image-preview" src="" alt="Media Preview" class="hidden media-fluid">
-                        <video id="video-preview" src="" controls class="hidden media-fluid" muted></video>
+                
+                <div id="preview-container" class="hidden flex-col gap-6 w-full">
+                    <div class="bg-black/50 border border-white/5 rounded-2xl overflow-hidden flex items-center justify-center p-2 relative shadow-inner">
+                        <div class="roi-canvas-wrapper">
+                            <img id="image-preview" src="" class="hidden max-h-[40vh] object-contain rounded-xl">
+                            <video id="video-preview" src="" class="hidden max-h-[40vh] w-full rounded-xl" muted></video>
+                            <canvas id="roi-canvas" class="hidden"></canvas>
+                        </div>
                     </div>
-
-                    <div class="action-dock">
-                        <select id="model-type-select" class="modern-select">
+                    
+                    <!-- ROI Instruction Banner -->
+                    <div id="roi-instruction" class="roi-instruction-banner">
+                        <div class="roi-icon">
+                            <i data-lucide="scan" class="w-5 h-5"></i>
+                        </div>
+                        <div class="flex-1">
+                            <strong class="text-white text-sm">Draw Detection Region</strong><br>
+                            Click and drag on the preview to draw a bounding box for AI detection zone.
+                            Then press <span class="space-key-hint">⎵ Space</span> to start analysis.
+                        </div>
+                        <button id="roi-skip-btn" class="roi-skip-btn" title="Skip ROI — analyze full frame">
+                            Skip (Full Frame)
+                        </button>
+                    </div>
+                    
+                    <div class="flex items-center gap-3 bg-white/5 p-3 rounded-xl border border-white/5">
+                        <select id="model-type-select" class="flex-1 bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:border-blue-500 outline-none appearance-none">
                             <option value="all_models">🧠 All Models Combined</option>
-                            <option value="gtsrb_v2">🚦 Traffic Signs v2 (50ep, 640px)</option>
-                            <option value="gtsrb_fast">⚡ Traffic Signs Fast (25ep, 416px)</option>
-                            <option value="gtsrb">🚦 Traffic Signs (Original)</option>
+                            <option value="gtsrb_v2">🚦 Traffic Signs v2 (50ep)</option>
+                            <option value="gtsrb_fast">⚡ Traffic Signs Fast (25ep)</option>
                             <option value="road_damage">🛣️ Road Damage</option>
                             <option value="indian_signs">🇮🇳 Indian Signs</option>
                         </select>
-                        <button id="clear-btn" class="modern-btn btn-ghost">Discard</button>
-                        <button id="analyze-btn" class="modern-btn btn-primary">
-                            <span class="btn-text">Analyze with AI</span>
-                            <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path d="M5 12h14"></path>
-                                <path d="m12 5 7 7-7 7"></path>
-                            </svg>
+                        <button id="clear-btn" class="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-medium transition-colors border border-white/10">Discard</button>
+                        <button id="analyze-btn" class="hidden px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)] flex items-center gap-2">
+                            <i data-lucide="activity" class="w-4 h-4"></i> Execute Engine
                         </button>
                     </div>
                 </div>
-
             </div>
         </section>
 
-        <!-- Results Dashboard -->
-        <section id="results-dashboard" class="dashboard-section hidden">
-            <div class="dashboard-layout">
-                <!-- LEFT COLUMN: Main content -->
-                <div class="dash-left">
-                    <!-- Smart Advisory Banner -->
-                    <div class="advisory-banner glass-panel" id="advisory-banner">
-                        <div class="advisory-header">
-                            <div class="advisory-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" />
-                                    <path d="M12 8v4" />
-                                    <path d="M12 16h.01" />
-                                </svg>
+        <!-- DASHBOARD GRID -->
+        <section id="results-dashboard" class="hidden flex-1 w-full min-h-0 bg-[#0b0c10] p-4 flex-col gap-4 relative">
+            
+            <!-- MAIN ROW -->
+            <div class="flex-1 flex gap-4 min-h-0 z-10 w-full" style="height: calc(75% - 0.5rem);">
+                
+                <!-- LEFT PANEL (40%) -->
+                <div class="w-[40%] flex flex-col gap-4 min-h-0 shrink-0">
+                    
+                    <!-- 1. WEATHER CARD -->
+                    <div id="weather-strip" class="glass-dark rounded-2xl p-4 shrink-0 relative overflow-hidden flex items-center justify-center min-h-[100px]">
+                        <div id="weather-loading" class="absolute inset-0 bg-slate-900/80 flex items-center justify-center z-10">
+                            <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-blue-500"></i>
+                        </div>
+                        <div id="weather-data" class="hidden w-full flex items-center gap-4">
+                            <div class="bg-blue-500/10 rounded-xl p-2 shrink-0">
+                                <img id="weather-icon" src="" class="w-12 h-12 drop-shadow-lg">
                             </div>
-                            <h3>Intelligent Driving Advisory</h3>
-                            <button class="speak-btn" id="speak-advisory-btn" title="Read aloud">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                                </svg>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-end gap-2">
+                                    <span id="weather-temp" class="text-3xl font-black leading-none text-white">--°</span>
+                                    <span id="weather-desc" class="text-sm font-medium text-slate-400 capitalize truncate pb-0.5">--</span>
+                                </div>
+                                <div class="grid grid-cols-4 gap-2 mt-2">
+                                    <div class="flex flex-col"><span class="text-[9px] text-slate-500 uppercase tracking-widest">Humid</span><span id="weather-humidity" class="text-xs font-semibold text-slate-300">--</span></div>
+                                    <div class="flex flex-col"><span class="text-[9px] text-slate-500 uppercase tracking-widest">Vis</span><span id="weather-visibility" class="text-xs font-semibold text-slate-300">--</span></div>
+                                    <div class="flex flex-col"><span class="text-[9px] text-slate-500 uppercase tracking-widest">Wind</span><span id="weather-wind" class="text-xs font-semibold text-slate-300">--</span></div>
+                                    <div class="flex flex-col"><span class="text-[9px] text-slate-500 uppercase tracking-widest">Loc</span><span id="weather-city" class="text-xs font-semibold text-slate-300 truncate">--</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="weather-risk-badge" class="absolute top-3 right-3 px-2 py-0.5 bg-slate-800 rounded text-[9px] font-bold tracking-wider border border-slate-700 text-slate-300 flex items-center gap-1.5">
+                            <span class="risk-dot w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                            <span id="weather-risk-text">UNKNOWN</span>
+                        </div>
+                    </div>
+
+                    <!-- VISION OUTPUT Container (Includes Video + Objects list) -->
+                    <!-- We nest the video and object list inside the Left Panel to fit the dashboard layout while still showing the video -->
+                    
+                    <!-- Video Feed -->
+                    <div class="glass-dark rounded-2xl flex-[0.6] min-h-[160px] relative overflow-hidden border border-white/10 group p-1">
+                        <div id="loading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-40 hidden backdrop-blur-sm">
+                            <i data-lucide="cpu" class="w-8 h-8 text-blue-500 animate-pulse mb-3"></i>
+                            <span class="text-sm font-bold text-white tracking-widest">INFERENCE ACTIVE</span>
+                            <div class="w-32 h-1 bg-white/10 rounded-full mt-3 overflow-hidden"><div class="h-full bg-blue-500 w-1/2 animate-[progress_1s_ease-in-out_infinite]"></div></div>
+                        </div>
+                        
+                        <!-- Main Video/Image -->
+                        <div class="w-full h-full bg-black rounded-xl overflow-hidden relative flex justify-center items-center">
+                            <img id="result-image" class="w-full h-full object-cover hidden" />
+                            <video id="result-video" class="w-full h-full object-cover hidden" autoplay muted loop></video>
+                        </div>
+                        
+                        <!-- Overlay Advisory Banner within Video Feed -->
+                        <div id="advisory-banner" class="absolute top-3 left-3 right-3 bg-slate-900/90 backdrop-blur-md rounded-xl p-3 border border-slate-700 shadow-2xl z-30 transition-opacity">
+                            <div class="flex justify-between items-start">
+                                <div class="flex items-center gap-2 max-w-[85%]">
+                                    <div class="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                                        <i data-lucide="shield" class="w-3.5 h-3.5 text-blue-400"></i>
+                                    </div>
+                                    <p id="advisory-text" class="text-xs font-bold text-white truncate">Analyzing conditions...</p>
+                                </div>
+                                <button id="speak-advisory-btn" class="text-slate-400 hover:text-white bg-white/5 p-1.5 rounded-lg transition-colors">
+                                    <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                            <div id="advisory-tags" class="flex gap-2 mt-2 ml-8 overflow-x-auto no-scrollbar"></div>
+                        </div>
+                    </div>
+
+                    <!-- Detected Objects List -->
+                    <div class="glass-dark rounded-2xl flex-[0.4] min-h-[140px] flex flex-col overflow-hidden relative">
+                        <div class="px-4 py-2 bg-white/5 border-b border-white/5 flex items-center justify-between shrink-0">
+                            <h3 class="text-xs font-bold text-white flex items-center gap-2 uppercase tracking-widest">
+                                <i data-lucide="eye" class="w-3.5 h-3.5 text-blue-400"></i> Vision Output
+                            </h3>
+                            <span id="detection-count" class="bg-white/10 px-2 py-0.5 rounded text-[10px] font-bold text-slate-300 border border-white/5 shadow-inner">0 Entities</span>
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-2 no-scrollbar bg-black/20">
+                            <ul id="detections-list" class="flex flex-col gap-1 neural-list m-0"></ul>
+                        </div>
+                    </div>
+                    
+                </div>
+
+                <!-- RIGHT PANEL (50% basically flex-1) -->
+                <div class="flex-1 flex flex-col gap-4 min-h-0 shrink-0 relative">
+                    
+                    <!-- Dedicated Speedometer Panel (BMW Style) -->
+                    <div class="glass-dark rounded-2xl shrink-0 p-4 flex gap-6 items-center">
+                        <div class="w-64 h-32 relative flex items-center justify-center ml-4">
+                            <canvas id="speedometer-canvas" width="300" height="150" class="w-full h-full"></canvas>
+                        </div>
+                        <div class="flex flex-col items-center justify-center mr-8">
+                            <div class="flex items-baseline gap-1 leading-none">
+                                <span id="speed-value" class="text-5xl font-black text-white tracking-tighter">0</span>
+                                <span class="text-sm font-bold text-slate-500 uppercase">km/h</span>
+                            </div>
+                            <span id="speed-status" class="text-xs font-bold text-blue-500 uppercase tracking-widest mt-2 border border-blue-500/30 px-3 py-1 rounded bg-blue-500/10">CRUISING</span>
+                        </div>
+                    </div>
+
+                    <!-- AI Chat Box -->
+                    <div class="glass-dark rounded-2xl flex-1 flex flex-col overflow-hidden relative min-h-[200px] shrink-0">
+                        <!-- Chat Header -->
+                        <div class="px-5 py-3 border-b border-white/5 bg-white/5 shrink-0 flex items-center justify-between z-10">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 p-[1.5px] shadow-lg shadow-indigo-500/20">
+                                    <div class="w-full h-full bg-slate-900 rounded-full flex items-center justify-center relative">
+                                        <i data-lucide="bot" class="w-4 h-4 text-indigo-400"></i>
+                                        <div class="pulse-indicator w-2.5 h-2.5 rounded-full bg-emerald-500 absolute bottom-0 right-0 border border-slate-900"></div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col">
+                                    <h3 class="text-sm font-bold text-white leading-none">Sentinel AI</h3>
+                                    <div class="flex items-center gap-1.5 mt-1">
+                                        <span class="dot w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]"></span>
+                                        <span class="status-text text-[9px] uppercase tracking-wider font-bold text-slate-400">Online</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button id="analyze-another-btn" class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 transition-colors border border-white/5" title="New Session">
+                                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
-                        <p class="advisory-text" id="advisory-text">Analyzing conditions...</p>
-                        <div class="advisory-tags" id="advisory-tags"></div>
-                    </div>
 
-                    <!-- Vision Output -->
-                    <div class="glass-panel viewport-panel">
-                        <div class="panel-header">
-                            <h3>Vision Output</h3>
-                            <div class="status-indicator">
-                                <span class="dot active"></span>
-                                <span class="status-text">Live Sync</span>
-                            </div>
+                        <!-- Chat Messages Area -->
+                        <div id="ai-messages" class="flex-1 overflow-y-auto p-5 scroll-smooth flex flex-col gap-3 bg-gradient-to-b from-black/20 to-transparent">
+                            <div class="msg ai self-start">Awaiting data stream. Weather + detection advisory engine online.</div>
                         </div>
-                        <div class="media-result-wrapper">
-                            <div id="loading" class="inference-loading hidden">
-                                <div class="cyber-spinner"></div>
-                                <div class="loading-text">Running multi-model inference...</div>
-                                <div class="loading-bar">
-                                    <div class="loading-progress"></div>
+
+                        <!-- Chat Input -->
+                        <div class="px-5 py-4 shrink-0 bg-slate-900/60 border-t border-white/5 backdrop-blur-md">
+                            <div class="relative flex items-center box-border">
+                                <input type="text" id="chat-input" class="w-full bg-black/50 border border-white/10 rounded-xl pl-5 pr-20 py-3.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner placeholder-slate-500" placeholder="Chat with Sentinel AI..." autocomplete="off">
+                                <div class="absolute right-2 flex items-center gap-1">
+                                    <button id="chat-mic-btn" class="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
+                                        <i data-lucide="mic" class="w-4 h-4"></i>
+                                    </button>
+                                    <button id="chat-send-btn" class="w-9 h-9 flex items-center justify-center text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-md transition-all">
+                                        <i data-lucide="arrow-up" class="w-4 h-4"></i>
+                                    </button>
                                 </div>
                             </div>
-                            <img id="result-image" src="" alt="Inference Result" class="hidden media-fluid">
-                            <video id="result-video" src="" controls class="hidden media-fluid" autoplay muted loop></video>
-                        </div>
-                    </div>
-
-                    <!-- Detection Log -->
-                    <div class="glass-panel log-panel">
-                        <div class="panel-header">
-                            <h3>Telemetry Log</h3>
-                            <span class="badge secondary" id="detection-count">0 Entities</span>
-                        </div>
-                        <div class="log-container">
-                            <ul id="detections-list" class="neural-list"></ul>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- RIGHT COLUMN: Speedometer + AI Assistant -->
-                <div class="dash-right">
-                    <!-- Speedometer (30%) -->
-                    <div class="glass-panel speedometer-panel">
-                        <canvas id="speedometer-canvas" width="240" height="150"></canvas>
-                        <div class="speed-readout">
-                            <span class="speed-value" id="speed-value">60</span>
-                            <span class="speed-unit">km/h</span>
-                        </div>
-                        <div class="speed-status" id="speed-status">Cruising</div>
-                    </div>
-
-                    <!-- AI Co-pilot (70%) -->
-                    <div class="glass-panel copilot-panel">
-                        <div class="copilot-header">
-                            <div class="copilot-identity">
-                                <div class="hexagon-avatar">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--brand-primary)">
-                                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                                    </svg>
-                                </div>
-                                <span>Sentinel AI</span>
-                            </div>
-                            <div class="pulse-indicator"></div>
-                        </div>
-                        <div id="ai-messages" class="copilot-stream">
-                            <div class="msg ai">Awaiting data stream. Weather + detection advisory engine online.</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="action-dock centered mt-lg">
-                <button id="analyze-another-btn" class="modern-btn btn-outline">Analyze Another Stream</button>
+            <!-- BOTTOM PANEL (25% height - TELEMETRY) -->
+            <div class="glass-dark rounded-2xl h-[25%] shrink-0 flex flex-col relative overflow-hidden z-10 w-full mb-1">
+                <div class="terminal-scanline"></div>
+                <div class="px-4 py-2 border-b border-white/5 bg-black/60 shrink-0 flex items-center justify-between z-30">
+                    <div class="flex items-center gap-3">
+                        <div class="flex gap-1.5">
+                            <div class="w-2.5 h-2.5 rounded-full bg-slate-700"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-slate-700"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-slate-700"></div>
+                        </div>
+                        <h3 class="text-[11px] font-bold text-slate-400 tracking-widest font-mono uppercase">Telemetry Log</h3>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#22c55e]"></span>
+                        <span class="text-[9px] text-green-500 font-bold uppercase tracking-wider font-mono">Live Recording</span>
+                    </div>
+                </div>
+                <div id="telemetry-log" class="flex-1 overflow-y-auto p-4 font-mono text-xs z-30 relative scroll-smooth selection:bg-green-900 selection:text-green-100 flex flex-col gap-1">
+                    <div class="text-slate-500 mb-1"><span class="text-slate-600 opacity-70">[System]</span> Sentinel Engine Initialized. Waiting for data...</div>
+                </div>
             </div>
+            
         </section>
     </main>
 
-    <!-- Modal -->
-    <div id="image-modal" class="neural-modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content-wrapper">
-            <button class="modal-close" id="close-modal">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 6 6 18" />
-                    <path d="m6 6 12 12" />
-                </svg>
-            </button>
-            <div class="modal-header">
-                <h3>Frame Extraction Data</h3>
-            </div>
-            <img class="neural-modal-img" id="modal-img" src="" alt="Extracted Frame">
+    <!-- MODAL -->
+    <div id="image-modal" class="neural-modal hidden fixed inset-0 z-[100] bg-black/90 flex flex-col p-8 backdrop-blur-md">
+        <button id="close-modal" class="fixed top-8 right-8 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors border border-white/20 z-10">
+            <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+        <div class="text-white text-lg font-bold mb-4 font-sans tracking-wide">Frame Extraction Data</div>
+        <div class="flex-1 min-h-0 flex items-center justify-center">
+            <img id="modal-img" class="max-h-full max-w-full object-contain rounded-xl shadow-2xl border border-white/10" src="">
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="/static/script.js"></script>
-</body>
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
 
+        // Custom Telemetry Injection script that observes the app's native behaviors
+        document.addEventListener('DOMContentLoaded', () => {
+            const telemetryLog = document.getElementById('telemetry-log');
+            
+            function addTelemetry(msg, colorClass = "text-slate-300", accentClass = "text-blue-400") {
+                if (!telemetryLog) return;
+                const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+                const div = document.createElement('div');
+                div.className = `flex gap-3 hover:bg-white/5 px-2 py-0.5 rounded transition-colors ${colorClass}`;
+                div.innerHTML = `<span class="w-[70px] shrink-0 text-slate-500 opacity-80">[${time}]</span> <span class="${accentClass}">${msg}</span>`;
+                telemetryLog.appendChild(div);
+                telemetryLog.scrollTop = telemetryLog.scrollHeight;
+            }
+
+            // Observe Detections List
+            const detList = document.getElementById('detections-list');
+            if (detList) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        mutation.addedNodes.forEach(node => {
+                            if (node.nodeType === 1 && node.querySelector) {
+                                const titleEl = node.querySelector('.det-title');
+                                const confEl = node.querySelector('.det-meta');
+                                if (titleEl && titleEl.textContent !== "Zero Confident Detections") {
+                                    const confSuffix = confEl ? " " + confEl.textContent.split('·').pop().trim() : "";
+                                    addTelemetry(`Detected object: <span class="font-bold text-white">${titleEl.textContent}</span>${confSuffix}`, "text-slate-300", "text-slate-300");
+                                }
+                            }
+                        });
+                    });
+                });
+                observer.observe(detList, { childList: true });
+            }
+
+            // Override global setSpeed safely to log speed commands
+            if (typeof window.setSpeed === 'function') {
+                const ogSetSpeed = window.setSpeed;
+                window.setSpeed = function(speed, reason) {
+                    // Only log if it's an interesting speed event (not initial 60 cruise set or duplicates)
+                    if (reason && reason !== 'Cruising' && speed !== 60) {
+                        const statusColor = speed > 100 ? "text-rose-400" : (speed < 50 ? "text-amber-400" : "text-emerald-400");
+                        addTelemetry(`Speed Recommended: ${Math.round(speed)} km/h. Reason: ${reason}`, statusColor, statusColor);
+                    }
+                    ogSetSpeed(speed, reason);
+                };
+            }
+
+            // Override global addBotMessage to log predictive advisories 
+            if (typeof window.addBotMessage === 'function') {
+                const ogAddBotMessage = window.addBotMessage;
+                window.addBotMessage = function(text, isAlert) {
+                    if (isAlert) {
+                        addTelemetry(`ALERT: ${text}`, "text-rose-400", "text-rose-400 font-bold");
+                    } else if (text.includes("Weather Report:")) {
+                        addTelemetry(text, "text-sky-300", "text-sky-300");
+                    } else if (text.includes("Analysis complete")) {
+                        addTelemetry(text, "text-emerald-400", "text-emerald-400");
+                    }
+                    ogAddBotMessage(text, isAlert);
+                };
+            }
+        });
+    </script>
+</body>
 </html>

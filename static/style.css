@@ -292,6 +292,102 @@ body {
     color: #FBCFE8;
 }
 
+/* AI Voice Speaking Indicator */
+.pulse-indicator {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: rgba(129, 140, 248, 0.3);
+    transition: all 0.3s ease;
+}
+.pulse-indicator.speaking {
+    background: var(--brand-primary);
+    box-shadow: 0 0 8px var(--brand-primary), 0 0 20px rgba(129, 140, 248, 0.4);
+    animation: voicePulse 1s ease-in-out infinite;
+}
+@keyframes voicePulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 8px var(--brand-primary), 0 0 20px rgba(129, 140, 248, 0.4); }
+    50% { transform: scale(1.4); box-shadow: 0 0 16px var(--brand-primary), 0 0 40px rgba(129, 140, 248, 0.6); }
+}
+
+.speak-btn.active {
+    background: rgba(129,140,248,0.3);
+    border-color: var(--brand-primary);
+    animation: voicePulse 1s ease-in-out infinite;
+}
+
+/* ═══════════════════════ CHAT INPUT BAR ═══════════════════════ */
+.chat-input-bar {
+    display: flex; gap: 0.5rem; padding: 0.6rem 0.8rem;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    background: rgba(0,0,0,0.2);
+}
+.chat-input {
+    flex: 1; padding: 0.55rem 0.8rem; border-radius: 10px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-primary); font-family: var(--font-body); font-size: 0.8rem;
+    outline: none; transition: all 0.3s ease;
+}
+.chat-input:focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 2px rgba(129,140,248,0.15);
+    background: rgba(255,255,255,0.08);
+}
+.chat-input::placeholder { color: var(--text-muted); }
+.chat-send-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--brand-primary), #6366F1);
+    border: none; color: white; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s ease; flex-shrink: 0;
+}
+.chat-send-btn:hover { transform: scale(1.05); box-shadow: 0 4px 15px rgba(99,102,241,0.4); }
+.chat-send-btn:active { transform: scale(0.95); }
+.chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* Microphone button */
+.chat-mic-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-secondary); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s ease; flex-shrink: 0;
+}
+.chat-mic-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); border-color: var(--brand-primary); }
+.chat-mic-btn.recording {
+    background: rgba(239, 68, 68, 0.2); border-color: #EF4444; color: #EF4444;
+    animation: micPulse 1.2s ease-in-out infinite;
+}
+@keyframes micPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+.chat-mic-btn.unsupported { opacity: 0.3; cursor: not-allowed; }
+
+/* User message bubble */
+.copilot-panel .msg.user {
+    background: rgba(99,102,241,0.2); border: 1px solid rgba(99,102,241,0.3);
+    color: #E0E7FF; align-self: flex-end; border-top-right-radius: 4px;
+    border-top-left-radius: 10px;
+}
+
+/* AI typing indicator */
+.typing-indicator {
+    display: flex; gap: 4px; padding: 0.6rem 0.8rem;
+    border-radius: 10px; border-top-left-radius: 4px;
+    background: rgba(129,140,248,0.08); border: 1px solid rgba(129,140,248,0.12);
+    align-self: flex-start; width: fit-content;
+}
+.typing-indicator .dot-bounce {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--brand-primary); opacity: 0.5;
+    animation: typingBounce 1.4s ease-in-out infinite;
+}
+.typing-indicator .dot-bounce:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator .dot-bounce:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+}
+
 .viewport-panel { padding: 1.5rem; }
 .log-panel { padding: 1.5rem; max-height: 500px; display: flex; flex-direction: column; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }

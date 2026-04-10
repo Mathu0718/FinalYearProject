@@ -44,6 +44,18 @@ let currentWeather = null;
 let userLat = 13.0827;  // Default: Chennai
 let userLon = 80.2707;
 
+// ── ROI Drawing State ──
+const roiCanvas = document.getElementById('roi-canvas');
+const roiCtx = roiCanvas ? roiCanvas.getContext('2d') : null;
+const roiInstruction = document.getElementById('roi-instruction');
+const roiSkipBtn = document.getElementById('roi-skip-btn');
+let roiDrawing = false;
+let roiStart = { x: 0, y: 0 };
+let roiEnd = { x: 0, y: 0 };
+let roiRect = null;  // { x, y, w, h } in canvas-pixel coords
+let roiReady = false;  // true once a box has been drawn
+let roiMode = false;   // true when we're in ROI drawing mode
+
 // Speedometer
 const speedCanvas = document.getElementById('speedometer-canvas');
 const speedCtx = speedCanvas.getContext('2d');
@@ -156,15 +168,222 @@ function handleFile(file) {
     if (currentFileType === 'image') {
         imagePreview.src = url;
         imagePreview.classList.remove('hidden');
+        // Wait for image to load, then init ROI canvas
+        imagePreview.onload = () => initROICanvas(imagePreview);
     } else {
         videoPreview.src = url;
         videoPreview.classList.remove('hidden');
+        // Wait for video metadata to get dimensions
+        videoPreview.onloadeddata = () => {
+            // Pause at first frame for drawing
+            videoPreview.pause();
+            videoPreview.currentTime = 0;
+            initROICanvas(videoPreview);
+        };
     }
 
     dropZone.classList.add('hidden');
     previewContainer.classList.remove('hidden');
 
-    addBotMessage(`Stream loaded: ${file.name}. Select model and execute inference.`);
+    addBotMessage(`Stream loaded: ${file.name}. Draw an ROI box on the preview, then press Space to start analysis.`);
+}
+
+// ── ROI Canvas Initialization ──
+function initROICanvas(mediaEl) {
+    if (!roiCanvas || !roiCtx) return;
+
+    roiMode = true;
+    roiReady = false;
+    roiRect = null;
+
+    // Match canvas to the rendered media size
+    const rect = mediaEl.getBoundingClientRect();
+    roiCanvas.width = rect.width;
+    roiCanvas.height = rect.height;
+    roiCanvas.style.width = rect.width + 'px';
+    roiCanvas.style.height = rect.height + 'px';
+    roiCanvas.classList.remove('hidden');
+
+    // Show instruction banner
+    if (roiInstruction) {
+        roiInstruction.classList.remove('roi-ready-banner');
+        roiInstruction.querySelector('.flex-1').innerHTML = `
+            <strong class="text-white text-sm">Draw Detection Region</strong><br>
+            Click and drag on the preview to draw a bounding box for AI detection zone.
+            Then press <span class="space-key-hint">⎵ Space</span> to start analysis.
+        `;
+    }
+
+    // Clear any previous drawing
+    roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+
+    // Draw crosshair guides
+    drawROIGuides();
+}
+
+function drawROIGuides() {
+    if (!roiCtx) return;
+    const w = roiCanvas.width;
+    const h = roiCanvas.height;
+    roiCtx.clearRect(0, 0, w, h);
+
+    // Rule-of-thirds grid
+    roiCtx.strokeStyle = 'rgba(59, 130, 246, 0.15)';
+    roiCtx.lineWidth = 1;
+    roiCtx.setLineDash([4, 4]);
+    for (let i = 1; i <= 2; i++) {
+        // Vertical
+        roiCtx.beginPath();
+        roiCtx.moveTo((w / 3) * i, 0);
+        roiCtx.lineTo((w / 3) * i, h);
+        roiCtx.stroke();
+        // Horizontal
+        roiCtx.beginPath();
+        roiCtx.moveTo(0, (h / 3) * i);
+        roiCtx.lineTo(w, (h / 3) * i);
+        roiCtx.stroke();
+    }
+    roiCtx.setLineDash([]);
+
+    // If ROI is drawn, redraw it
+    if (roiRect) {
+        drawROIBox(roiRect.x, roiRect.y, roiRect.w, roiRect.h);
+    }
+}
+
+function drawROIBox(x, y, w, h) {
+    // Dim area outside ROI
+    roiCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    // Top strip
+    roiCtx.fillRect(0, 0, roiCanvas.width, y);
+    // Bottom strip
+    roiCtx.fillRect(0, y + h, roiCanvas.width, roiCanvas.height - y - h);
+    // Left strip
+    roiCtx.fillRect(0, y, x, h);
+    // Right strip
+    roiCtx.fillRect(x + w, y, roiCanvas.width - x - w, h);
+
+    // ROI border with animated dashes
+    roiCtx.strokeStyle = '#3b82f6';
+    roiCtx.lineWidth = 2;
+    roiCtx.setLineDash([6, 3]);
+    roiCtx.strokeRect(x, y, w, h);
+    roiCtx.setLineDash([]);
+
+    // Corner markers
+    const cornerLen = 12;
+    roiCtx.strokeStyle = '#60a5fa';
+    roiCtx.lineWidth = 3;
+    // Top-left
+    roiCtx.beginPath(); roiCtx.moveTo(x, y + cornerLen); roiCtx.lineTo(x, y); roiCtx.lineTo(x + cornerLen, y); roiCtx.stroke();
+    // Top-right
+    roiCtx.beginPath(); roiCtx.moveTo(x + w - cornerLen, y); roiCtx.lineTo(x + w, y); roiCtx.lineTo(x + w, y + cornerLen); roiCtx.stroke();
+    // Bottom-left
+    roiCtx.beginPath(); roiCtx.moveTo(x, y + h - cornerLen); roiCtx.lineTo(x, y + h); roiCtx.lineTo(x + cornerLen, y + h); roiCtx.stroke();
+    // Bottom-right
+    roiCtx.beginPath(); roiCtx.moveTo(x + w - cornerLen, y + h); roiCtx.lineTo(x + w, y + h); roiCtx.lineTo(x + w, y + h - cornerLen); roiCtx.stroke();
+
+    // Label
+    roiCtx.fillStyle = 'rgba(59, 130, 246, 0.85)';
+    roiCtx.font = 'bold 11px JetBrains Mono, monospace';
+    roiCtx.fillText(`ROI: ${Math.abs(Math.round(w))}×${Math.abs(Math.round(h))}px`, x + 4, y - 6);
+}
+
+// ── ROI Mouse Events ──
+if (roiCanvas) {
+    roiCanvas.addEventListener('mousedown', (e) => {
+        if (!roiMode) return;
+        const rect = roiCanvas.getBoundingClientRect();
+        roiStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        roiDrawing = true;
+        roiReady = false;
+        roiRect = null;
+    });
+
+    roiCanvas.addEventListener('mousemove', (e) => {
+        if (!roiDrawing || !roiMode) return;
+        const rect = roiCanvas.getBoundingClientRect();
+        roiEnd = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+        // Clamp to canvas bounds
+        roiEnd.x = Math.max(0, Math.min(roiCanvas.width, roiEnd.x));
+        roiEnd.y = Math.max(0, Math.min(roiCanvas.height, roiEnd.y));
+
+        const x = Math.min(roiStart.x, roiEnd.x);
+        const y = Math.min(roiStart.y, roiEnd.y);
+        const w = Math.abs(roiEnd.x - roiStart.x);
+        const h = Math.abs(roiEnd.y - roiStart.y);
+
+        roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+        if (w > 5 && h > 5) {
+            drawROIBox(x, y, w, h);
+        }
+    });
+
+    roiCanvas.addEventListener('mouseup', (e) => {
+        if (!roiDrawing || !roiMode) return;
+        roiDrawing = false;
+
+        const rect = roiCanvas.getBoundingClientRect();
+        roiEnd = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        roiEnd.x = Math.max(0, Math.min(roiCanvas.width, roiEnd.x));
+        roiEnd.y = Math.max(0, Math.min(roiCanvas.height, roiEnd.y));
+
+        const x = Math.min(roiStart.x, roiEnd.x);
+        const y = Math.min(roiStart.y, roiEnd.y);
+        const w = Math.abs(roiEnd.x - roiStart.x);
+        const h = Math.abs(roiEnd.y - roiStart.y);
+
+        if (w > 10 && h > 10) {
+            roiRect = { x, y, w, h };
+            roiReady = true;
+
+            // Update instruction banner to green "ready" state
+            if (roiInstruction) {
+                roiInstruction.classList.add('roi-ready-banner');
+                const wPct = ((w / roiCanvas.width) * 100).toFixed(0);
+                const hPct = ((h / roiCanvas.height) * 100).toFixed(0);
+                roiInstruction.querySelector('.flex-1').innerHTML = `
+                    <strong class="text-white text-sm">✓ Detection Region Set</strong>
+                    <span class="roi-coords-badge">${Math.round(w)}×${Math.round(h)}px (${wPct}%×${hPct}%)</span><br>
+                    Press <span class="space-key-hint">⎵ Space</span> to start analysis, or redraw to adjust.
+                `;
+            }
+
+            addBotMessage(`ROI region set: ${Math.round(w)}×${Math.round(h)}px. Press Space to begin analysis.`);
+        } else {
+            // Too small, reset
+            roiRect = null;
+            roiReady = false;
+            roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+            drawROIGuides();
+        }
+    });
+}
+
+// ── Space Key Listener for ROI → Analysis ──
+document.addEventListener('keydown', (e) => {
+    // Only trigger when in ROI mode and not typing in an input
+    if (e.code !== 'Space') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (!roiMode) return;
+    if (!currentFile) return;
+
+    e.preventDefault();
+    roiMode = false;
+
+    // Start analysis (with or without ROI)
+    triggerAnalysis();
+});
+
+// ── Skip ROI Button ──
+if (roiSkipBtn) {
+    roiSkipBtn.addEventListener('click', () => {
+        roiRect = null;
+        roiReady = false;
+        roiMode = false;
+        triggerAnalysis();
+    });
 }
 
 clearBtn.addEventListener('click', resetInterface);
@@ -182,17 +401,36 @@ function resetInterface() {
     mainInterface.classList.remove('hidden');
     dropZone.classList.remove('hidden');
 
+    // Reset ROI state
+    roiRect = null;
+    roiReady = false;
+    roiMode = false;
+    roiDrawing = false;
+    if (roiCanvas) roiCanvas.classList.add('hidden');
+    if (roiCtx) roiCtx.clearRect(0, 0, roiCanvas.width, roiCanvas.height);
+    if (roiInstruction) roiInstruction.classList.remove('roi-ready-banner');
+
     aiMessages.innerHTML = '<div class="msg ai">Awaiting new data stream.</div>';
 
     // Reset speedometer & speech
     setSpeed(60, 'Cruising');
     speechQueue.length = 0;
-    window.speechSynthesis.cancel();
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     isSpeaking = false;
 }
 
-// ── Analysis ──
-analyzeBtn.addEventListener('click', async () => {
+// ── Analysis (triggered by Space key or Skip button) ──
+function triggerAnalysis() {
+    // Redirect to the actual analysis handler
+    if (!currentFile) return;
+    analyzeWithROI();
+}
+
+async function analyzeWithROI() {
     if (!currentFile) return;
 
     mainInterface.classList.add('hidden');
@@ -214,16 +452,35 @@ analyzeBtn.addEventListener('click', async () => {
     // Reset speedometer for new analysis
     setSpeed(60, 'Cruising');
     speechQueue.length = 0;
-    window.speechSynthesis.cancel();
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     isSpeaking = false;
 
-    addBotMessage(`Initiating ${modelTypeSelect.options[modelTypeSelect.selectedIndex].text} analysis...`, false);
+    const roiLabel = roiRect ? ` with ROI region (${Math.round(roiRect.w)}×${Math.round(roiRect.h)}px)` : ' (Full Frame)';
+    addBotMessage(`Initiating ${modelTypeSelect.options[modelTypeSelect.selectedIndex].text} analysis${roiLabel}...`, false);
 
     const formData = new FormData();
     formData.append('file', currentFile);
     formData.append('model_type', modelTypeSelect.value);
     formData.append('lat', userLat);
     formData.append('lon', userLon);
+
+    // Send ROI coordinates as normalized ratios (0-1)
+    if (roiRect && roiCanvas) {
+        const roiNorm = {
+            x: roiRect.x / roiCanvas.width,
+            y: roiRect.y / roiCanvas.height,
+            w: roiRect.w / roiCanvas.width,
+            h: roiRect.h / roiCanvas.height,
+        };
+        formData.append('roi_x', roiNorm.x.toFixed(4));
+        formData.append('roi_y', roiNorm.y.toFixed(4));
+        formData.append('roi_w', roiNorm.w.toFixed(4));
+        formData.append('roi_h', roiNorm.h.toFixed(4));
+    }
 
     // Use streaming endpoint for videos, regular for images
     const isVideo = currentFileType === 'video';
@@ -276,6 +533,12 @@ analyzeBtn.addEventListener('click', async () => {
         copilotStatus.textContent = "Error";
         copilotDot.style.background = "#EF4444";
     }
+}
+
+// Keep the old analyze button working too (now hidden, but just in case)
+analyzeBtn.addEventListener('click', () => {
+    roiMode = false;
+    triggerAnalysis();
 });
 
 // ── Handle Stream Events (real-time) ──
@@ -324,15 +587,35 @@ function handleStreamEvent(event, spokenSet) {
             const count = detectionsList.children.length;
             detectionCount.textContent = `${count} Entities`;
 
-            // Speak advisory IMMEDIATELY (queued — no overlap)
+            // Track announced classes
             if (!spokenSet.has(rawName)) {
                 spokenSet.add(rawName);
-                const advisory = advisoriesMap[rawName] || `Detected: ${rawName}. Navigate safely.`;
-                const isAlert = advisory.includes("Warning") || advisory.includes("Danger");
-                addBotMessage(`🔴 LIVE: ${advisory}`, isAlert);
-                speak(advisory);
             }
         });
+
+    } else if (event.event === 'immediate_action') {
+        // Only show text, do not force speech immediately over conversations
+        addBotMessage(`🔴 IMMEDIATE: ${event.action}`, true);
+        if (!isSpeaking && !isProcessingVoice && !window.blockAutoSpeech) {
+            window.blockAutoSpeech = true;
+            setTimeout(() => window.blockAutoSpeech = false, 15000); // 15s cooldown
+            speak(event.action);
+        }
+
+    } else if (event.event === 'predictive_advisory') {
+        if (event.advisory) {
+            advisoryText.textContent = event.advisory.combined_advisory;
+            
+            // Wait 15 seconds before explaining the analysis, if another event or completion doesn't cancel it
+            if (window.predictiveTimeout) clearTimeout(window.predictiveTimeout);
+            
+            window.predictiveTimeout = setTimeout(() => {
+                if (!isProcessingVoice) {
+                    addBotMessage(`📊 PREDICTIVE: ${event.advisory.combined_advisory}`);
+                    speak(event.advisory.combined_advisory);
+                }
+            }, 15000);
+        }
 
     } else if (event.event === 'speed_sync') {
         const recommendation = calculateContextualSpeed(event.classes);
@@ -363,8 +646,16 @@ function handleStreamEvent(event, spokenSet) {
             if (event.advisory.damage_alerts?.length) addTag(`🛣️ ${event.advisory.damage_alerts.length} road issue(s)`, 'damage');
             if (event.advisory.sign_alerts?.length) addTag(`🚦 ${event.advisory.sign_alerts.length} sign(s)`, 'sign');
 
-            // Speak final combined advisory
-            setTimeout(() => speak(event.advisory.combined_advisory), 500);
+            // Clear pending midway explanations if video fully complete
+            if (window.predictiveTimeout) clearTimeout(window.predictiveTimeout);
+            
+            // Speak final combined advisory but give it a 10-second delay so it doesn't interrupt chat
+            setTimeout(() => {
+                if (!isProcessingVoice) {
+                    addBotMessage(`📊 FINAL ADVISORY: ${event.advisory.combined_advisory}`);
+                    speak(event.advisory.combined_advisory);
+                }
+            }, 10000);
         }
 
         if (event.weather && event.weather.status === 'ok') {
@@ -376,12 +667,18 @@ function handleStreamEvent(event, spokenSet) {
             }
         }
 
+        // Save analysis context for chat
+        updateAnalysisContext(event);
+
         addBotMessage(`✅ Analysis complete. ${event.total_frames_processed} frames processed. ${event.detections.length} unique objects detected.`);
     }
 }
 
 // ── Render Results ──
 function renderResults(data) {
+    // Save analysis context for chat
+    updateAnalysisContext(data);
+
     loadingOverlay.classList.add('hidden');
     advisoryBanner.classList.remove('loading');
     copilotStatus.textContent = "Live Sync";
@@ -531,32 +828,105 @@ function addBotMessage(text, isAlert = false) {
     aiMessages.scrollTop = aiMessages.scrollHeight;
 }
 
-// ── Speech Queue System ──
+// ── AI Voice System (Kokoro TTS / Fallback) ──
 const speechQueue = [];
 let isSpeaking = false;
+let ttsAvailable = false;
+let ttsEngine = null;
+let currentAudio = null;
+
+// Check server TTS status on load
+(async function checkTTS() {
+    try {
+        const res = await fetch('/tts/status');
+        if (res.ok) {
+            const status = await res.json();
+            ttsAvailable = status.available;
+            ttsEngine = status.engine;
+            if (ttsAvailable) {
+                console.log(`[TTS] AI Voice online: ${ttsEngine} engine`);
+                addBotMessage(`🔊 AI Voice System online (${ttsEngine === 'kokoro' ? 'Kokoro Neural TTS' : 'System TTS'})`);
+            }
+        }
+    } catch (e) {
+        console.warn('[TTS] Status check failed, using browser fallback');
+    }
+})();
 
 function speak(text) {
-    if (!('speechSynthesis' in window)) return;
+    if (!text || text.trim().length === 0) return;
     speechQueue.push(text);
     processQueue();
 }
 
-function processQueue() {
+async function processQueue() {
     if (isSpeaking || speechQueue.length === 0) return;
     isSpeaking = true;
     const text = speechQueue.shift();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = 1.0;
-    utter.pitch = 1.05;
-    utter.onend = () => {
+
+    // Show speaking indicator
+    const pulseEl = document.querySelector('.pulse-indicator');
+    if (pulseEl) pulseEl.classList.add('speaking');
+
+    if (ttsAvailable) {
+        // Use server-side AI TTS
+        try {
+            const res = await fetch('/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, voice: 'af_heart', speed: 1.0 })
+            });
+
+            if (res.ok) {
+                const audioBlob = await res.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                currentAudio = new Audio(audioUrl);
+                currentAudio.volume = 1.0;
+
+                currentAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                    isSpeaking = false;
+                    if (pulseEl) pulseEl.classList.remove('speaking');
+                    processQueue();
+                };
+                currentAudio.onerror = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                    isSpeaking = false;
+                    if (pulseEl) pulseEl.classList.remove('speaking');
+                    processQueue();
+                };
+
+                await currentAudio.play();
+                return;
+            }
+        } catch (e) {
+            console.warn('[TTS] Server error, falling back to browser:', e);
+        }
+    }
+
+    // Fallback: Browser SpeechSynthesis
+    if ('speechSynthesis' in window) {
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.rate = 1.0;
+        utter.pitch = 1.05;
+        utter.onend = () => {
+            isSpeaking = false;
+            if (pulseEl) pulseEl.classList.remove('speaking');
+            processQueue();
+        };
+        utter.onerror = () => {
+            isSpeaking = false;
+            if (pulseEl) pulseEl.classList.remove('speaking');
+            processQueue();
+        };
+        window.speechSynthesis.speak(utter);
+    } else {
         isSpeaking = false;
+        if (pulseEl) pulseEl.classList.remove('speaking');
         processQueue();
-    };
-    utter.onerror = () => {
-        isSpeaking = false;
-        processQueue();
-    };
-    window.speechSynthesis.speak(utter);
+    }
 }
 
 // ── Speedometer ──
@@ -565,54 +935,48 @@ function drawSpeedometer(speed) {
     const W = speedCanvas.width;
     const H = speedCanvas.height;
     const cx = W / 2;
-    const cy = H - 10;
-    const radius = 100;
+    const cy = H - 20;
+    const radius = 110;
 
     speedCtx.clearRect(0, 0, W, H);
 
-    // Background arc
+    // BMW distinctive style:
+    // Outer Metallic Ring
     speedCtx.beginPath();
     speedCtx.arc(cx, cy, radius, Math.PI, 0, false);
-    speedCtx.lineWidth = 18;
-    speedCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+    speedCtx.lineWidth = 4;
+    speedCtx.strokeStyle = 'rgba(200,200,210,0.8)';
     speedCtx.stroke();
 
-    // Color zones: green (0-60), yellow (60-100), red (100-140)
-    const zones = [
-        { start: 0, end: 60, color: '#22C55E' },
-        { start: 60, end: 100, color: '#F59E0B' },
-        { start: 100, end: 140, color: '#EF4444' },
-    ];
-
-    zones.forEach(z => {
-        const sAngle = Math.PI + (z.start / 140) * Math.PI;
-        const eAngle = Math.PI + (z.end / 140) * Math.PI;
-        speedCtx.beginPath();
-        speedCtx.arc(cx, cy, radius, sAngle, eAngle, false);
-        speedCtx.lineWidth = 18;
-        speedCtx.strokeStyle = z.color + '30';
-        speedCtx.stroke();
-    });
-
-    // Active arc
-    const activeAngle = Math.PI + (Math.min(speed, 140) / 140) * Math.PI;
-    let arcColor = '#22C55E';
-    if (speed > 100) arcColor = '#EF4444';
-    else if (speed > 60) arcColor = '#F59E0B';
-    else if (speed <= 0) arcColor = '#EF4444';
-
+    // Middle thick black/grey band
     speedCtx.beginPath();
-    speedCtx.arc(cx, cy, radius, Math.PI, activeAngle, false);
-    speedCtx.lineWidth = 18;
-    speedCtx.strokeStyle = arcColor;
-    speedCtx.lineCap = 'round';
+    speedCtx.arc(cx, cy, radius - 8, Math.PI, 0, false);
+    speedCtx.lineWidth = 14;
+    speedCtx.strokeStyle = 'rgba(20,20,25,0.9)';
     speedCtx.stroke();
 
-    // Tick marks & labels
+    // BMW blue/red M-accents on the arc
+    // Blue segment for 0-60
+    speedCtx.beginPath();
+    const angle60 = Math.PI + (60 / 140) * Math.PI;
+    speedCtx.arc(cx, cy, radius - 8, Math.PI, angle60, false);
+    speedCtx.lineWidth = 14;
+    speedCtx.strokeStyle = 'rgba(0, 114, 206, 0.4)'; // M Blue
+    speedCtx.stroke();
+
+    // Red segment for 100-140
+    speedCtx.beginPath();
+    const angle100 = Math.PI + (100 / 140) * Math.PI;
+    speedCtx.arc(cx, cy, radius - 8, angle100, Math.PI * 2, false);
+    speedCtx.lineWidth = 14;
+    speedCtx.strokeStyle = 'rgba(226, 35, 26, 0.4)'; // M Red
+    speedCtx.stroke();
+
+    // Tick marks and Labels
     for (let i = 0; i <= 140; i += 20) {
         const angle = Math.PI + (i / 140) * Math.PI;
-        const inner = radius - 28;
-        const outer = radius - 12;
+        const inner = radius - 20;
+        const outer = radius;
         const x1 = cx + Math.cos(angle) * inner;
         const y1 = cy + Math.sin(angle) * inner;
         const x2 = cx + Math.cos(angle) * outer;
@@ -621,43 +985,60 @@ function drawSpeedometer(speed) {
         speedCtx.beginPath();
         speedCtx.moveTo(x1, y1);
         speedCtx.lineTo(x2, y2);
-        speedCtx.lineWidth = 2;
-        speedCtx.strokeStyle = 'rgba(255,255,255,0.3)';
-        speedCtx.lineCap = 'round';
+        speedCtx.lineWidth = i % 40 === 0 ? 3 : 1;
+        speedCtx.strokeStyle = i % 40 === 0 ? '#fff' : 'rgba(255,255,255,0.5)';
         speedCtx.stroke();
 
         // Labels
-        const lx = cx + Math.cos(angle) * (inner - 12);
-        const ly = cy + Math.sin(angle) * (inner - 12);
-        speedCtx.fillStyle = 'rgba(255,255,255,0.4)';
-        speedCtx.font = '9px Inter, sans-serif';
-        speedCtx.textAlign = 'center';
-        speedCtx.textBaseline = 'middle';
-        speedCtx.fillText(i, lx, ly);
+        if (i % 40 === 0 || i === 0 || i === 140) {
+            const lx = cx + Math.cos(angle) * (inner - 14);
+            const ly = cy + Math.sin(angle) * (inner - 14);
+            speedCtx.fillStyle = '#fff';
+            speedCtx.font = 'bold 12px Inter, sans-serif';
+            speedCtx.textAlign = 'center';
+            speedCtx.textBaseline = 'middle';
+            speedCtx.fillText(i, lx, ly);
+        }
     }
 
-    // Needle
+    // BMW Orange/Red Needle
     const needleAngle = Math.PI + (Math.min(Math.max(speed, 0), 140) / 140) * Math.PI;
-    const needleLen = radius - 35;
+
+    // Needle Trail (glowing arc)
+    speedCtx.beginPath();
+    speedCtx.arc(cx, cy, radius - 20, Math.PI, needleAngle, false);
+    speedCtx.lineWidth = 4;
+    speedCtx.strokeStyle = 'rgba(255, 60, 0, 0.8)';
+    speedCtx.stroke();
+
+    // The Needle Point
+    const needleLen = radius - 15;
     const nx = cx + Math.cos(needleAngle) * needleLen;
     const ny = cy + Math.sin(needleAngle) * needleLen;
 
     speedCtx.beginPath();
     speedCtx.moveTo(cx, cy);
     speedCtx.lineTo(nx, ny);
-    speedCtx.lineWidth = 3;
-    speedCtx.strokeStyle = '#fff';
+    speedCtx.lineWidth = 4;
+    speedCtx.strokeStyle = '#FF3C00';
+    speedCtx.shadowColor = '#FF3C00';
+    speedCtx.shadowBlur = 10;
     speedCtx.lineCap = 'round';
     speedCtx.stroke();
+    speedCtx.shadowBlur = 0; // reset
 
-    // Center dot
+    // Center cap
     speedCtx.beginPath();
-    speedCtx.arc(cx, cy, 6, 0, Math.PI * 2);
-    speedCtx.fillStyle = arcColor;
+    speedCtx.arc(cx, cy, 12, 0, Math.PI * 2);
+    speedCtx.fillStyle = '#111';
     speedCtx.fill();
+    speedCtx.lineWidth = 2;
+    speedCtx.strokeStyle = '#555';
+    speedCtx.stroke();
+
     speedCtx.beginPath();
-    speedCtx.arc(cx, cy, 3, 0, Math.PI * 2);
-    speedCtx.fillStyle = '#fff';
+    speedCtx.arc(cx, cy, 4, 0, Math.PI * 2);
+    speedCtx.fillStyle = '#FF3C00';
     speedCtx.fill();
 }
 
@@ -768,3 +1149,293 @@ function calculateContextualSpeed(classesArray) {
 
 // Initialize speedometer
 drawSpeedometer(60);
+
+// ── Conversational AI Chat System ──
+let lastAnalysisData = { detections: [], advisory: null, weather: null };
+
+// Track analysis results for chat context
+function updateAnalysisContext(data) {
+    if (data.detections) lastAnalysisData.detections = data.detections;
+    if (data.advisory) lastAnalysisData.advisory = data.advisory;
+    if (data.weather) lastAnalysisData.weather = data.weather;
+}
+
+const chatInput = document.getElementById('chat-input');
+const chatSendBtn = document.getElementById('chat-send-btn');
+
+function addUserMessage(text) {
+    const msg = document.createElement('div');
+    msg.className = 'msg user';
+    msg.textContent = text;
+    aiMessages.appendChild(msg);
+    aiMessages.scrollTop = aiMessages.scrollHeight;
+}
+
+function showTypingIndicator() {
+    const indicator = document.createElement('div');
+    indicator.className = 'typing-indicator';
+    indicator.id = 'typing-indicator';
+    indicator.innerHTML = '<div class="dot-bounce"></div><div class="dot-bounce"></div><div class="dot-bounce"></div>';
+    aiMessages.appendChild(indicator);
+    aiMessages.scrollTop = aiMessages.scrollHeight;
+    return indicator;
+}
+
+function removeTypingIndicator() {
+    const el = document.getElementById('typing-indicator');
+    if (el) el.remove();
+}
+
+// ── Stop All Speech (interruption) ──
+function stopAllSpeech() {
+    // Stop server TTS audio
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
+    }
+    // Clear queue
+    speechQueue.length = 0;
+    isSpeaking = false;
+    // Stop browser TTS
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    // Reset visual indicator
+    const pulseEl = document.querySelector('.pulse-indicator');
+    if (pulseEl) pulseEl.classList.remove('speaking');
+}
+
+async function sendChatMessage(inputText) {
+    const text = (inputText || chatInput.value).trim();
+    if (!text) return;
+
+    // ★ STOP any current speech when user sends a message
+    stopAllSpeech();
+
+    // Show user message
+    addUserMessage(text);
+    chatInput.value = '';
+    chatSendBtn.disabled = true;
+
+    // Show typing indicator
+    showTypingIndicator();
+
+    // Build context from current analysis state
+    const context = {
+        detections: lastAnalysisData.detections || [],
+        weather: lastAnalysisData.weather || currentWeather || {},
+        advisory: lastAnalysisData.advisory || {},
+        speed: Math.round(currentSpeed),
+        speedStatus: currentSpeedReason,
+    };
+
+    try {
+        const res = await fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text, context })
+        });
+
+        removeTypingIndicator();
+
+        if (res.ok) {
+            const data = await res.json();
+
+            // Show AI response
+            addBotMessage(data.response);
+
+            // Play audio response (AI speaks back)
+            if (data.audio_url) {
+                const audio = new Audio(data.audio_url);
+                audio.volume = 1.0;
+                currentAudio = audio;  // Track so it can be interrupted
+                const pulseEl = document.querySelector('.pulse-indicator');
+                if (pulseEl) pulseEl.classList.add('speaking');
+                audio.onended = () => {
+                    currentAudio = null;
+                    if (pulseEl) pulseEl.classList.remove('speaking');
+                };
+                audio.onerror = () => {
+                    currentAudio = null;
+                    if (pulseEl) pulseEl.classList.remove('speaking');
+                    speak(data.response);
+                };
+                try {
+                    await audio.play();
+                } catch (e) {
+                    currentAudio = null;
+                    if (pulseEl) pulseEl.classList.remove('speaking');
+                    speak(data.response);
+                }
+            } else {
+                speak(data.response);
+            }
+        } else {
+            addBotMessage("Sorry, I encountered an error processing your question. Please try again.", true);
+        }
+    } catch (e) {
+        removeTypingIndicator();
+        addBotMessage("Connection error. Please check if the server is running.", true);
+        console.error('[Chat]', e);
+    }
+
+    chatSendBtn.disabled = false;
+    chatInput.focus();
+}
+
+// Event listeners for chat
+if (chatSendBtn) {
+    chatSendBtn.addEventListener('click', () => sendChatMessage());
+}
+if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendChatMessage();
+        }
+    });
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── ALWAYS-ON Voice-to-Voice System (Continuous Listening) ──
+// ══════════════════════════════════════════════════════════════
+const chatMicBtn = document.getElementById('chat-mic-btn');
+let recognition = null;
+let isListening = false;
+let isMicEnabled = false;
+let voiceDebounceTimer = null;
+let currentTranscript = '';
+let isProcessingVoice = false;
+
+const MIN_CONFIDENCE = 0.5;
+const MIN_WORDS = 1;
+const SILENCE_DELAY = 1500;
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    let sentenceStartIndex = 0; // Tracks the start index of the current sentence
+
+    recognition.onstart = () => {
+        isListening = true;
+        sentenceStartIndex = 0; // Reset index on fresh start
+        if (chatMicBtn) chatMicBtn.classList.add('recording');
+        chatInput.placeholder = '🎙️ Listening... speak anytime';
+        console.log('[Voice] Mic is live');
+    };
+
+    recognition.onresult = (event) => {
+        clearTimeout(voiceDebounceTimer);
+
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = sentenceStartIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript + ' ';
+            } else {
+                interimTranscript += event.results[i][0].transcript;
+            }
+        }
+
+        const fullTranscript = (finalTranscript + interimTranscript).trim();
+
+        if (fullTranscript.length > 0) {
+            // Stop AI speech if the user interrupts and has uttered meaningful words
+            stopAllSpeech();
+
+            chatInput.value = fullTranscript;
+            chatInput.style.color = (interimTranscript.length > 0) ? '#94a3b8' : '#ffffff'; // slate-400 during interim
+
+            voiceDebounceTimer = setTimeout(() => {
+                let messageToSend = fullTranscript.replace(/hey\s*(sentinel|sentinal|centinel|centinal)\b/gi, '').trim();
+                
+                // Fast-forward sentence start index to ignore these results going forward
+                sentenceStartIndex = event.results.length;
+
+                if (messageToSend.length === 0) messageToSend = "Hello";
+                
+                if (messageToSend.split(/\s+/).length >= MIN_WORDS && !isProcessingVoice) {
+                    isProcessingVoice = true;
+                    chatInput.value = '';
+                    
+                    // Instantly send message to AI Backend
+                    sendChatMessage(messageToSend).then(() => {
+                        isProcessingVoice = false;
+                    });
+                }
+            }, SILENCE_DELAY);
+        }
+    };
+
+    recognition.onerror = (event) => {
+        console.warn('[Voice] Error:', event.error);
+        if (event.error === 'not-allowed') {
+            isListening = false;
+            isMicEnabled = false;
+            if (chatMicBtn) chatMicBtn.classList.remove('recording');
+            chatInput.placeholder = 'Mic blocked — type your question...';
+            addBotMessage("🎙️ Microphone access denied. Go to browser address bar → click the lock/info icon → allow Microphone → refresh page.", true);
+        }
+    };
+
+    recognition.onend = () => {
+        isListening = false;
+        if (isMicEnabled) {
+            setTimeout(() => {
+                if (isMicEnabled && !isListening) {
+                    try { recognition.start(); } catch (e) {}
+                }
+            }, 300);
+        } else {
+            if (chatMicBtn) chatMicBtn.classList.remove('recording');
+            chatInput.placeholder = 'Ask about detections, weather, speed...';
+        }
+    };
+
+    console.log('[Voice] Speech recognition available');
+} else {
+    if (chatMicBtn) {
+        chatMicBtn.classList.add('unsupported');
+        chatMicBtn.title = 'Voice input not supported — use Chrome or Edge';
+    }
+    console.warn('[Voice] SpeechRecognition not supported');
+}
+
+if (chatMicBtn && recognition) {
+    chatMicBtn.addEventListener('click', () => {
+        stopAllSpeech();
+        if (isMicEnabled) {
+            isMicEnabled = false;
+            try { recognition.stop(); } catch (e) {}
+            chatMicBtn.classList.remove('recording');
+            chatInput.placeholder = 'Ask about detections, weather, speed...';
+            addBotMessage("🎙️ Voice mode OFF. You can type your questions.");
+        } else {
+            isMicEnabled = true;
+            try { recognition.start(); } catch (e) { console.warn('[Voice] Start error:', e); }
+            addBotMessage("🎙️ Voice mode ON — I'm always listening. Just speak anytime.");
+        }
+    });
+
+    // ── Auto-Start Voice System on Load ──
+    const startMicAutomatically = () => {
+        if (!isMicEnabled) {
+            isMicEnabled = true;
+            try { recognition.start(); } catch (e) { console.warn('[Voice] Auto-start error:', e); }
+        }
+    };
+
+    // Try starting immediately
+    setTimeout(startMicAutomatically, 1000);
+
+    // Fallback: Start securely on first user interaction if browser blocked auto-start
+    document.addEventListener('click', () => {
+        if (!isMicEnabled) startMicAutomatically();
+    }, { once: true });
+}

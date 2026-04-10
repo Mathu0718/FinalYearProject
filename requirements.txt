@@ -24,3 +24,8 @@ pandas>=2.0.0
 
 # Optional: for downloading arrow/U-turn dataset (pip install roboflow)
 roboflow>=1.1.0
+
+# AI Text-to-Speech (Kokoro = primary, pyttsx3 = fallback)
+kokoro>=0.9.4
+soundfile>=0.13.0
+pyttsx3>=2.90
